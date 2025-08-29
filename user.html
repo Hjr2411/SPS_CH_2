@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Usuário - SPS_CH</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-database-compat.js"></script>
+  <script src="firebase-config.js"></script>
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="title">Painel do Usuário</div>
+      <div class="session">
+        <span id="userName" class="badge"></span>
+        <button onclick="logout()" class="btn ghost">Sair</button>
+      </div>
+    </div>
+
+    <div class="content" id="userContent">
+      <h2>Gerenciar Chamados</h2>
+      <form id="chamadoForm">
+        <label class="field">
+          <span>Analista</span>
+          <input id="uAnalista" type="text" readonly>
+        </label>
+        <label class="field">
+          <span>Chamado</span>
+          <input id="uChamado" type="text">
+        </label>
+        <label class="field">
+          <span>Linha</span>
+          <input id="uLinha" type="text">
+        </label>
+        <label class="field">
+          <span>Equipamento</span>
+          <input id="uEquipamento" type="text">
+        </label>
+        <label class="field">
+          <span>Cenário</span>
+          <input id="uCenario" type="text">
+        </label>
+        <label class="field">
+          <span>Data de Encaminhamento</span>
+          <input id="uData" type="date">
+        </label>
+        <label class="field">
+          <span>Detalhes</span>
+          <textarea id="uDetalhes"></textarea>
+        </label>
+        <div class="form-actions">
+          <button type="button" id="btnUserSalvar" class="btn primary">Salvar</button>
+          <button type="button" id="btnUserNovo" class="btn">Novo</button>
+          <button type="button" id="btnUserLimpar" class="btn">Limpar</button>
+        </div>
+      </form>
+
+      <h3>Meus Chamados</h3>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Chamado</th>
+            <th>Linha</th>
+            <th>Equipamento</th>
+            <th>Cenário</th>
+          </tr>
+        </thead>
+        <tbody id="userTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/user.js"></script>
+</body>
+</html>
+
+
