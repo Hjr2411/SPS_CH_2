@@ -1,5 +1,5 @@
 // auth.js -> login/logout/sessão simples usando Firestore (coleção "usuarios")
-import { db } from "../config/firebase_config.js";
+import { db } from "./config/firebase_config.js";
 import {
   collection, query, where, getDocs
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
