@@ -16,11 +16,11 @@
       <input id="password" type="password" placeholder="••••" autocomplete="current-password" required />
       <button type="submit" class="btn primary">Entrar</button>
     </form>
-    <p class="muted">Dica: admin/1234 • joao/1111</p>
+    <p class="muted">Dica: use os usuários do RTDB (ex.: admin/admin1, user/user, helio/97616896 ...)</p>
   </div>
 
   <script type="module">
-    import { login, getSession } from "../services/auth.js";
+    import { login, getSession } from "../services/auth_rtdb.js";
     import { toast } from "../assets/utils.js";
 
     // Se já estiver logado, pula
