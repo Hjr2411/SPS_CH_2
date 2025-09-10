@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8">
+<script type="module">
+import { app, rtdb } from "../config/firebase_config.js";
+import { ref, get, child } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+try {
+  const snap = await get(child(ref(rtdb), "app/users"));
+  alert("RTDB OK: " + (snap.exists() ? "users encontrados" : "sem users"));
+  console.log("users:", snap.val());
+} catch (e) {
+  alert("Falha no RTDB: " + e.message);
+  console.error(e);
+}
+</script>
