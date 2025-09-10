@@ -42,7 +42,7 @@
       <button class="btn primary">Salvar</button>
       <button type="button" id="btnCancelar" class="btn">Cancelar</button>
     </form>
-    <p class="muted">Atenção: este exemplo usa senha em texto simples no Firestore (como pedido). Em produção, use hashing/Autenticação Firebase. ❗</p>
+    <p class="muted">Atenção: exemplo simples com senha em texto (em produção use Auth/Hash). ❗</p>
   </section>
 
   <section class="panel">
@@ -57,7 +57,7 @@
 </main>
 
 <script type="module">
-  import { requireAuth, requireAdmin, logout } from "../services/auth.js";
+  import { requireAuth, requireAdmin, logout } from "../services/auth_rtdb.js";
   import { listUsuarios, createUsuario, updateUsuario, deleteUsuario } from "../services/usuarios.js";
   import { toast, formatDate } from "../assets/utils.js";
 
