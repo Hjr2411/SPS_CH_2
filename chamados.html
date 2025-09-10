@@ -73,7 +73,7 @@
 </main>
 
 <script type="module">
-  import { requireAuth, logout } from "../services/auth.js";
+  import { requireAuth, logout } from "../services/auth_rtdb.js";
   import { createChamado, listChamados, updateChamado, deleteChamado } from "../services/chamados.js";
   import { formatDate, toast } from "../assets/utils.js";
 
@@ -143,13 +143,13 @@
     if (!btn) return;
     const id = btn.dataset.edit || btn.dataset.del;
     if (btn.dataset.edit) {
-      // carrega dados na UI
+      // carrega dados na UI (básico; para descrição fiel, busque do DB pelo id)
       const row = Array.from(tbody.children).find(tr => tr.querySelector(`[data-edit="${id}"]`));
       const [titulo, prioridade, status] = Array.from(row.children).slice(0,3).map(td => td.textContent.trim());
       document.getElementById("titulo").value = titulo;
       document.getElementById("prioridade").value = prioridade;
       document.getElementById("status").value = status;
-      document.getElementById("descricao").value = ""; // editar descrição manualmente (poderia buscar do DB se necessário)
+      document.getElementById("descricao").value = "";
       document.getElementById("chamadoId").value = id;
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else if (btn.dataset.del) {
