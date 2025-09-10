@@ -1,0 +1,19 @@
+📦 projeto-sps
+├── 📂 public
+│   ├── index.html
+│   ├── dashboard.html
+│   ├── chamados.html
+│   └── usuarios.html
+│
+├── 📂 services
+│   ├── auth.js
+│   ├── chamados.js
+│   ├── usuarios.js
+│   └── dashboard.js
+│
+├── 📂 config
+│   └── firebase_config.js
+│
+└── 📂 assets
+    ├── style.css
+    └── utils.js
