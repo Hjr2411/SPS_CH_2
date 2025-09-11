@@ -4,16 +4,15 @@
   <meta charset="UTF-8" />
   <title>Login • SPS</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  
   <link rel="stylesheet" href="./assets/style.css" />
 </head>
 <body class="center">
   <div class="card">
     <h1>SPS • Login</h1>
     <form id="loginForm">
-      <label>Usuário</label>
+      <label for="username">Usuário</label>
       <input id="username" type="text" placeholder="usuario" autocomplete="username" required />
-      <label>Senha</label>
+      <label for="password">Senha</label>
       <input id="password" type="password" placeholder="••••" autocomplete="current-password" required />
       <button type="submit" class="btn primary">Entrar</button>
     </form>
@@ -21,10 +20,10 @@
   </div>
 
   <script type="module">
-    import { login, getSession } from "./services/auth_rtdb.js";
+    import { login, getSession } from "./services/auth.js";   // <<— AQUI
     import { toast } from "./assets/utils.js";
 
-    // Se já estiver logado, pula
+    // Redireciona se já estiver logado
     const sess = getSession();
     if (sess) {
       window.location.href = "./dashboard.html";
