@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8">
+<script type="module">
+  import { rtdb } from "./config/firebase_config.js";
+  import { ref, get, child } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+
+  const username = prompt("Digite um username que exista em app/users (ex.: admin)");
+  const snap = await get(child(ref(rtdb), `app/users/${username}`));
+  if (!snap.exists()) {
+    alert("Não achei: app/users/" + username + ". Verifique o nome exato e a estrutura.");
+  } else {
+    alert("OK! Dados do usuário:\n" + JSON.stringify(snap.val(), null, 2));
+  }
+</script>
