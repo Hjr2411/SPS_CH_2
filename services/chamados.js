@@ -1,12 +1,13 @@
 // /services/chamados.js
 // CRUD de Chamados usando Realtime Database em app/chamados
-// Mapeamento para UI:
+// Mapeamento:
 // - titulo      ← chamado
-// - descricao   ← cenario (concat com equipamento/linha para exibir melhor)
+// - descricao   ← descricao (observações)
 // - status      ← deleted ? "Fechado" : "Aberto"
-// - prioridade  ← (opcional) campo salvo em RTDB se informado
+// - prioridade  ← (opcional) campo salvo se informado
 // - criadoPor   ← analista
 // - criadoEm    ← createdAt (epoch ms)
+// - linha/msisdn, equipamento, cenario → campos diretos no RTDB
 
 import { rtdb } from "../config/firebase_config.js";
 import {
@@ -20,31 +21,32 @@ const ROOT = "app/chamados";
 const toStr = (v) => (v == null ? "" : String(v));
 
 function mapToUI(id, c) {
-  const titulo = toStr(c.chamado) || "(sem título)";
-  const partes = [];
-  if (c.cenario) partes.push(`Cenário: ${toStr(c.cenario)}`);
-  if (c.equipamento) partes.push(`Equip: ${toStr(c.equipamento)}`);
-  if (c.linha) partes.push(`Linha: ${toStr(c.linha)}`);
-  const descricao = partes.join(" • ") || toStr(c.cenario) || "";
-
-  const prioridade = c.prioridade ? toStr(c.prioridade) : "Média"; // default
-  const status = c.deleted ? "Fechado" : "Aberto";
-  const criadoEm = c.createdAt ?? null;
-  const criadoPor = { username: c.analista || "-" };
-
-  return { id, titulo, descricao, prioridade, status, criadoPor, criadoEm };
+  return {
+    id,
+    titulo: toStr(c.chamado) || "(sem título)",
+    descricao: toStr(c.descricao || ""),        // <- Observações
+    prioridade: c.prioridade ? toStr(c.prioridade) : "Média",
+    status: c.deleted ? "Fechado" : "Aberto",
+    criadoEm: c.createdAt ?? null,
+    criadoPor: { username: c.analista || "-" },
+    linha: c.linha || c.msisdn || "",
+    equipamento: c.equipamento || "",
+    cenario: c.cenario || ""
+  };
 }
 
 function normalizeForSave({ titulo, descricao, prioridade, status }, user) {
   return {
     chamado: toStr(titulo),
-    cenario: toStr(descricao),
-    equipamento: "",     // pode ser preenchido via UI se quiser
-    linha: "",           // idem
-    prioridade: prioridade ? toStr(prioridade) : undefined, // opcional no RTDB
+    descricao: toStr(descricao),           // <- Observações gravadas
+    prioridade: prioridade ? toStr(prioridade) : undefined,
     deleted: status === "Fechado",
     createdAt: Date.now(),
     analista: user?.username || "desconhecido",
+    // Campos específicos; podem ser complementados depois via updateChamado
+    equipamento: "",
+    linha: "",
+    cenario: "",
     isDuplicate: false
   };
 }
@@ -58,12 +60,13 @@ export async function listChamados({ busca = "", status = "", prioridade = "" } 
   const qBusca = busca.trim().toLowerCase();
 
   const filtered = arr.filter(c =>
-    (!qBusca || c.titulo.toLowerCase().includes(qBusca) || c.descricao.toLowerCase().includes(qBusca)) &&
+    (!qBusca || [
+      c.titulo, c.descricao, c.linha, c.criadoPor?.username, c.equipamento, c.cenario
+    ].some(v => String(v || "").toLowerCase().includes(qBusca))) &&
     (!status || c.status === status) &&
     (!prioridade || c.prioridade === prioridade)
   );
 
-  // Ordena por criadoEm desc (se houver), senão por título
   filtered.sort((a, b) => {
     const ta = Number(a.criadoEm || 0);
     const tb = Number(b.criadoEm || 0);
@@ -85,18 +88,22 @@ export async function createChamado({ titulo, descricao, prioridade = "Média", 
 }
 
 export async function updateChamado(id, fields) {
-  // Mapeia apenas os campos suportados pelo RTDB
+  // Aceita atualizar: titulo/descricao/status/prioridade/equipamento/linha/cenario/createdAt
   const patch = {};
   if (fields.titulo != null) patch["chamado"] = toStr(fields.titulo);
-  if (fields.descricao != null) patch["cenario"] = toStr(fields.descricao);
+  if (fields.descricao != null) patch["descricao"] = toStr(fields.descricao);
   if (fields.status != null) patch["deleted"] = fields.status === "Fechado";
-  if (fields.prioridade != null) patch["prioridade"] = toStr(fields.prioridade); // opcional
+  if (fields.prioridade != null) patch["prioridade"] = toStr(fields.prioridade);
 
-  // Se quiser permitir editar equipamento/linha:
   if (fields.equipamento != null) patch["equipamento"] = toStr(fields.equipamento);
   if (fields.linha != null) patch["linha"] = toStr(fields.linha);
+  if (fields.cenario != null) patch["cenario"] = toStr(fields.cenario);
 
-  if (Object.keys(patch).length === 0) return; // nada a fazer
+  if (fields.createdAt != null && !Number.isNaN(Number(fields.createdAt))) {
+    patch["createdAt"] = Number(fields.createdAt);
+  }
+
+  if (Object.keys(patch).length === 0) return;
   await update(ref(rtdb, `${ROOT}/${id}`), patch);
 }
 
