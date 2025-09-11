@@ -2,51 +2,82 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Chamados • SPS (v1.1)</title>
+  <title>Chamados • SPS (v1.1.1)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="./assets/style.css" />
   <style>
-    /* v1.1: melhorias de layout, filtros, KPI e destaque de recorrência */
-    .req::after { content:" *"; color:#ef4444; font-weight:700; }
+    /* ===== v1.1.1 — Overrides de contraste e UX ===== */
+    :root{
+      --bg: #0b1220;
+      --panel: #0f172a;
+      --field: #121a2d;        /* fundo dos inputs */
+      --field-hover:#17223a;
+      --field-border:#334155;  /* borda visível */
+      --field-text:#e5e7eb;    /* texto claro */
+      --field-placeholder:#94a3b8;
+      --accent:#60a5fa;
+      --danger:#ef4444;
+      --muted:#94a3b8;
+      --row-alt:#0d1528;
+      --row-hover:#131e36;
+      --rep-bg:#2a1212;        /* destaque recorrente */
+      --rep-text:#fca5a5;
+    }
+    body{ background:var(--bg); color:var(--field-text); }
+    .panel{ background:var(--panel); }
+    /* Campos */
+    input, select, textarea{
+      background:var(--field);
+      border:1px solid var(--field-border);
+      color:var(--field-text);
+    }
+    input:hover, select:hover, textarea:hover{ background:var(--field-hover); }
+    input::placeholder, textarea::placeholder{ color:var(--field-placeholder); }
+    label{ color:var(--field-text); }
+    .req::after { content:" *"; color:var(--danger); font-weight:700; }
     .hint { font-size:.85rem; color: var(--muted); }
-    .icon-btn { background: transparent; border: none; cursor: pointer; color: var(--text); }
+    /* Grid 3×3 responsivo */
+    .grid.form { grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+    @media (max-width: 900px){ .grid.form { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 600px){ .grid.form { grid-template-columns: 1fr; } }
+    /* Tabela */
+    table.table thead th{ color:#cbd5e1; border-bottom:1px solid var(--field-border); }
+    table.table tbody tr:nth-child(even){ background:var(--row-alt); }
+    table.table tbody tr:hover{ background:var(--row-hover); }
+    /* Tooltip/icone */
+    .icon-btn { background: transparent; border: none; cursor: pointer; color: var(--field-text); }
     .tooltip { position: relative; }
     .tooltip[data-tip]:hover::after {
       content: attr(data-tip);
       position: absolute; left: 50%; transform: translateX(-50%); bottom: 120%;
       white-space: pre-wrap; max-width: 360px; padding: .6rem .8rem;
-      background: #0b1020; border:1px solid var(--border); border-radius: 10px;
-      color: var(--text); box-shadow: 0 8px 20px rgba(0,0,0,.35); z-index: 50;
+      background: #0b1020; border:1px solid var(--field-border); border-radius: 10px;
+      color: var(--field-text); box-shadow: 0 8px 20px rgba(0,0,0,.35); z-index: 50;
     }
-    .grid.form { grid-template-columns: repeat(3, 1fr); }
-    @media (max-width: 900px){ .grid.form { grid-template-columns: 1fr 1fr; } }
-    @media (max-width: 600px){ .grid.form { grid-template-columns: 1fr; } }
-    .kpi { font-weight: 600; margin-left: .25rem; }
+    /* KPI/filtros */
+    .kpi { font-weight: 700; color:#e2e8f0; }
+    .toolbar { display:flex; gap:.6rem; align-items:end; flex-wrap:wrap; }
     .toolbar .stat { display:flex; align-items:center; gap:.4rem; white-space:nowrap; }
-    .repetida { color: #b91c1c; font-weight: 700; } /* destaque para linhas recorrentes */
-    .pill-filter { display:flex; gap:.5rem; flex-wrap:wrap; align-items:end; }
-    .ranking { margin-top:.5rem; border:1px dashed var(--border); border-radius:8px; padding:.5rem; }
-    .ranking table { width:100%; font-size:.92rem; }
-    .ranking th, .ranking td { text-align:left; padding:.25rem .4rem; }
+    /* Recorrência */
+    .repetida-cell{ font-weight:800; color: var(--rep-text); }
+    .repetida-row{ background: var(--rep-bg) !important; }
+    .pill { padding:.1rem .4rem; border-radius: 999px; font-size:.75rem; border:1px solid #ef4444; color:#fecaca; }
+    /* Ocultar link usuários dinamicamente se não-admin (fallback se JS desligado) */
+    .hide { display:none !important; }
   </style>
   <!--
-    Chamados v1.1 – changelog:
-    - Carrega mês atual por padrão; KPIs: total do mês + total listados
-    - Recorrência por MSISDN (app/l_recorrente/<msisdn>): incrementa em criação, ajusta em edição
-    - Destaque visual para linhas recorrentes; filtro "Somente repetidas" + ranking
-    - Filtros por equipamento e cenário (app/listas/*)
-    - Esconde link "Usuários" para perfil não-admin
+    Chamados v1.1.1 – changelog:
+    - Correção: contagem/realce de linhas recorrentes (app/l_recorrente/<msisdn>)
+    - Melhoria de contraste: campos, tabela, hovers e tooltips
   -->
 </head>
 <body>
 <header class="topbar">
   <div class="brand">SPS • Chamados</div>
   <nav class="nav">
-   <!--
     <a href="./dashboard.html">Dashboard</a>
-  <a href="./chamados.html" class="active">Chamados</a>
-  <a href="./usuarios.html" id="navUsuarios">Usuários</a> 
--->
+    <a href="./chamados.html" class="active">Chamados</a>
+    <a href="./usuarios.html" id="navUsuarios">Usuários</a>
     <button id="logoutBtn" class="btn danger outline">Sair</button>
   </nav>
 </header>
@@ -102,7 +133,7 @@
       <span class="muted" style="font-weight:500;">(Mês atual: <span id="totalMes" class="kpi">0</span>)</span>
     </h2>
 
-    <div class="toolbar pill-filter" id="filtersBar">
+    <div class="toolbar" id="filtersBar">
       <label style="flex:1; min-width: 220px;">Busca (texto)
         <input id="filtroBusca" placeholder="msisdn, chamado, analista..." />
       </label>
@@ -159,17 +190,16 @@
   import { createChamado, listChamados, updateChamado, deleteChamado } from "./services/chamados.js";
   import { formatDate, toast } from "./assets/utils.js";
   import { rtdb } from "./config/firebase_config.js";
-  import { ref, get, child, set, update as rtdbUpdate } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+  import { ref, get, child, set } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
-  // sessão/role
+  /* ========= Sessão / Permissões ========= */
   const session = requireAuth();
   const isAdmin = session?.role === "admin";
   const currentUser = session?.username || "-";
   document.getElementById("logoutBtn").addEventListener("click", () => { logout(); window.location.href="./index.html"; });
-  // esconde link "Usuários" se não for admin
-  if (!isAdmin) { const nu = document.getElementById("navUsuarios"); if (nu) nu.remove(); }
+  if (!isAdmin) { const nu = document.getElementById("navUsuarios"); if (nu) nu.classList.add("hide"); }
 
-  // refs
+  /* ========= Refs ========= */
   const form = document.getElementById("formChamado");
   const inId = document.getElementById("chamadoId");
   const inMsisdnOld = document.getElementById("msisdnOld");
@@ -202,11 +232,13 @@
   });
   document.getElementById("btnExportar").addEventListener("click", exportarCSV);
 
-  // estado
+  /* ========= Estado/Utils ========= */
   inAnalista.value = currentUser;
+
   const onlyDigits = (s) => (s || "").replace(/\D+/g,"");
-  const validarMSISDN = (v) => onlyDigits(v).length === 11; // valida apenas no form
+  const validarMSISDN = (v) => onlyDigits(v).length === 11; // só no form
   const parseDTLocal = (v) => { if (!v) return null; const d = new Date(v); return isNaN(d) ? null : d.getTime(); };
+  const toDTLocalValue = (ms) => { const d=new Date(ms); const pad=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 
   function toggleOutro(selectEl, inputEl) {
     if (selectEl.value === "__outro__") { inputEl.style.display = ""; inputEl.focus(); }
@@ -215,33 +247,25 @@
   selEquip.addEventListener("change", () => toggleOutro(selEquip, inEqOutro));
   selCen.addEventListener("change", () => toggleOutro(selCen, inCenOutro));
 
-  // listas para selects e filtros
+  /* ========= Listas para selects e filtros ========= */
   async function carregarListas() {
     const eqSnap = await get(child(ref(rtdb), "app/listas/equipamentos"));
     const eqArr = eqSnap.exists() ? eqSnap.val().map(String).filter(Boolean) : [];
     const cenSnap = await get(child(ref(rtdb), "app/listas/cenarios"));
     const cenArr = cenSnap.exists() ? cenSnap.val().map(String).filter(Boolean) : [];
-
     const mk = (arr) => arr.map(v => `<option value="${v}">${v}</option>`).join("");
-
     selEquip.innerHTML = `<option value="">(selecione)</option>${mk(eqArr)}<option value="__outro__">Outro…</option>`;
     selCen.innerHTML = `<option value="">(selecione)</option>${mk(cenArr)}<option value="__outro__">Outro…</option>`;
-
-    // filtros
     filtroEquip.innerHTML = `<option value="">(todos)</option>${mk(eqArr)}`;
     filtroCen.innerHTML = `<option value="">(todos)</option>${mk(cenArr)}`;
   }
 
-  // mês atual
+  /* ========= Mês atual ========= */
   function getMonthBounds(ts = Date.now()) {
     const d = new Date(ts);
     const start = new Date(d.getFullYear(), d.getMonth(), 1, 0,0,0,0).getTime();
     const end = new Date(d.getFullYear(), d.getMonth()+1, 0, 23,59,59,999).getTime();
     return { start, end };
-  }
-  function toDTLocalValue(ms) {
-    const d = new Date(ms); const pad = n=>String(n).padStart(2,"0");
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
   function setDefaultMonthFilters() {
     const { start, end } = getMonthBounds();
@@ -249,7 +273,7 @@
     filtroDataFim.value = toDTLocalValue(end);
   }
 
-  // KPI: total do mês
+  /* ========= KPI do mês ========= */
   async function atualizarTotalMes() {
     const all = await listChamados({});
     const { start, end } = getMonthBounds();
@@ -259,7 +283,7 @@
     }).length;
   }
 
-  // Recorrência (app/l_recorrente/<msisdn>)
+  /* ========= Recorrência (app/l_recorrente/<msisdn>) ========= */
   let recorrenteMap = new Map(); // msisdn -> count
   async function carregarRecorrencias() {
     recorrenteMap.clear();
@@ -271,7 +295,6 @@
     montarRanking();
   }
   function montarRanking() {
-    // liga/desliga ranking conforme houver repetidas
     const arr = [...recorrenteMap.entries()].filter(([,count]) => count > 1)
       .sort((a,b)=> b[1]-a[1]).slice(0,50);
     if (!arr.length) { boxRanking.style.display = "none"; rankBody.innerHTML = ""; return; }
@@ -289,11 +312,11 @@
     montarRanking();
   }
 
-  // tabela (com filtros, padrão mês atual, destaque repetidas)
+  /* ========= Tabela (filtros padrão mês atual; destaque recorrentes) ========= */
   async function preencherTabela() {
     const busca = (filtroBusca.value || "").trim().toLowerCase();
-    const dtIni = parseDTLocal(filtroDataIni.value);
-    const dtFim = parseDTLocal(filtroDataFim.value);
+    const dtIni = (filtroDataIni.value) ? parseDTLocal(filtroDataIni.value) : getMonthBounds().start; // default mês atual
+    const dtFim = (filtroDataFim.value) ? parseDTLocal(filtroDataFim.value) : getMonthBounds().end;   // default mês atual
     const eqSel = filtroEquip.value;
     const cenSel = filtroCen.value;
     const onlyRep = filtroRepetidas.checked;
@@ -301,19 +324,13 @@
     const data = await listChamados({ busca });
     const filtered = data.filter(c => {
       const created = Number(c.criadoEm || 0);
-      if (dtIni && created < dtIni) return false;
-      if (dtFim && created > dtFim) return false;
+      if (created < dtIni || created > dtFim) return false;
       if (eqSel && c.equipamento !== eqSel) return false;
       if (cenSel && c.cenario !== cenSel) return false;
-
       const bucket = [c.titulo, c.linha, c.criadoPor?.username]
         .map(v => String(v || "").toLowerCase()).join("|");
       if (busca && !bucket.includes(busca)) return false;
-
-      if (onlyRep) {
-        const qtd = recorrenteMap.get(String(c.linha)) || 0;
-        if (qtd <= 1) return false;
-      }
+      if (onlyRep) { const qtd = recorrenteMap.get(String(c.linha)) || 0; if (qtd <= 1) return false; }
       return true;
     });
 
@@ -329,10 +346,12 @@
       const obs = c.descricao || "";
       const canEdit = isAdmin || (c.criadoPor?.username === currentUser);
       const repCount = recorrenteMap.get(String(c.linha)) || 0;
-      const repClass = repCount > 1 ? "repetida" : "";
-      const repBadge = repCount > 1 ? ` <span class="pill danger" title="Recorrências">${repCount}×</span>` : "";
+      const repClass = repCount > 1 ? "repetida-cell" : "";
+      const rowClass = repCount > 1 ? "repetida-row" : "";
+      const repBadge = repCount > 1 ? ` <span class="pill" title="Recorrências">${repCount}×</span>` : "";
 
       const tr = document.createElement("tr");
+      if (rowClass) tr.classList.add(rowClass);
       tr.innerHTML = `
         <td>${formatDate(c.criadoEm)}</td>
         <td>${c.criadoPor?.username || "-"}</td>
@@ -351,7 +370,7 @@
     }
   }
 
-  // copiar observação
+  /* ========= Copiar observação ========= */
   tbody.addEventListener("click", async (e) => {
     const btn = e.target.closest("button.icon-btn");
     if (!btn) return;
@@ -359,12 +378,12 @@
     catch { toast("Falha ao copiar.", "error"); }
   });
 
-  // salvar (criar/editar) com ajuste de recorrência
+  /* ========= Salvar (criar/editar) com ajuste de recorrência ========= */
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    const msisdn = onlyDigits(document.getElementById("msisdn").value);
-    if (!validarMSISDN(msisdn)) { toast("MSISDN deve ter 11 dígitos.", "error"); document.getElementById("msisdn").focus(); return; }
+    const msisdn = onlyDigits(inMSISDN.value);
+    if (!validarMSISDN(msisdn)) { toast("MSISDN deve ter 11 dígitos.", "error"); inMSISDN.focus(); return; }
     if (!inChamado.value.trim()) { toast("Campo 'Chamado' é obrigatório.", "error"); inChamado.focus(); return; }
 
     const equipamento = selEquip.value === "__outro__" ? (inEqOutro.value || "").trim() : selEquip.value;
@@ -384,7 +403,6 @@
           equipamento, linha: msisdn, cenario,
           ...(chosen ? { createdAt: chosen } : {})
         });
-        // ajustar recorrência se MSISDN mudou
         if (old && old !== msisdn) { await incRecorrencia(old, -1); await incRecorrencia(msisdn, +1); }
         toast("Chamado atualizado ✔️", "success");
       } else {
@@ -397,24 +415,23 @@
         toast("Chamado criado ✔️", "success");
       }
 
-      // reset
       form.reset(); inId.value = ""; inMsisdnOld.value = ""; inAnalista.value = currentUser;
       inEqOutro.style.display="none"; inCenOutro.style.display="none";
-      await preencherTabela();
       await carregarRecorrencias();
       await atualizarTotalMes();
+      await preencherTabela();
     } catch (err) {
       toast(err.message || "Erro ao salvar", "error");
     }
   });
 
-  // cancelar
+  /* ========= Cancelar ========= */
   document.getElementById("btnCancelar").addEventListener("click", () => {
     form.reset(); inId.value = ""; inMsisdnOld.value = ""; inAnalista.value = currentUser;
     inEqOutro.style.display="none"; inCenOutro.style.display="none";
   });
 
-  // editar/excluir com controles de permissão e msisdnOld
+  /* ========= Editar/Excluir ========= */
   document.querySelector("#tblChamados tbody").addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return;
     const id = b.dataset.edit || b.dataset.del;
@@ -444,23 +461,22 @@
     } else if (b.dataset.del) {
       if (!isAdmin) return;
       if (confirm("Excluir este chamado?")) {
-        // ao excluir, reduzir a recorrência da linha exibida
         const linhaTxt = b.closest("tr").children[3].textContent.trim();
         await deleteChamado(id);
         await incRecorrencia(onlyDigits(linhaTxt), -1);
         toast("Chamado excluído", "info");
-        await preencherTabela();
         await carregarRecorrencias();
         await atualizarTotalMes();
+        await preencherTabela();
       }
     }
   });
 
-  // export CSV (respeita filtros)
+  /* ========= Export CSV ========= */
   async function exportarCSV() {
     const busca = (filtroBusca.value || "").trim().toLowerCase();
-    const dtIni = parseDTLocal(filtroDataIni.value);
-    const dtFim = parseDTLocal(filtroDataFim.value);
+    const dtIni = (filtroDataIni.value) ? parseDTLocal(filtroDataIni.value) : getMonthBounds().start;
+    const dtFim = (filtroDataFim.value) ? parseDTLocal(filtroDataFim.value) : getMonthBounds().end;
     const eqSel = filtroEquip.value;
     const cenSel = filtroCen.value;
     const onlyRep = filtroRepetidas.checked;
@@ -468,12 +484,11 @@
     const data = await listChamados({ busca });
     const filtered = data.filter(c => {
       const created = Number(c.criadoEm || 0);
-      if (dtIni && created < dtIni) return false;
-      if (dtFim && created > dtFim) return false;
+      if (created < dtIni || created > dtFim) return false;
       if (eqSel && c.equipamento !== eqSel) return false;
       if (cenSel && c.cenario !== cenSel) return false;
       const bucket = [c.titulo, c.linha, c.criadoPor?.username]
-        .map(v => String(v || "").toLowerCase()).join("|");
+        .map(v => String(v||"").toLowerCase()).join("|");
       if (busca && !bucket.includes(busca)) return false;
       if (onlyRep) { const qtd = recorrenteMap.get(String(c.linha)) || 0; if (qtd <= 1) return false; }
       return true;
@@ -493,12 +508,12 @@
     document.body.appendChild(a); a.click(); a.remove();
   }
 
-  // boot: listas, filtros (mês atual), recorrências, kpi e tabela
+  /* ========= Boot ========= */
   await carregarListas();
-  setDefaultMonthFilters();
-  await carregarRecorrencias();
-  await atualizarTotalMes();
-  await preencherTabela();
+  setDefaultMonthFilters();          // por padrão → mês atual
+  await carregarRecorrencias();      // carrega/mostra ranking e habilita destaque
+  await atualizarTotalMes();         // KPI do mês
+  await preencherTabela();           // lista inicial (mês atual)
 </script>
 </body>
 </html>
