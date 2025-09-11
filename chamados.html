@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Chamados • SPS</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link href="../assets/style.css" rel="stylesheet" />
+  <link rel="stylesheet" href="./assets/style.css" />
 </head>
 <body>
 <header class="topbar">
@@ -18,29 +18,28 @@
 </header>
 
 <main class="container">
+  <!-- Formulário de criação/edição -->
   <section class="panel">
     <h2>Novo Chamado</h2>
     <form id="formChamado" class="grid form">
       <input type="hidden" id="chamadoId" />
-      <label>Título
+      <label for="titulo">Título
         <input id="titulo" required />
       </label>
-      <label>Prioridade
+      <label for="prioridade">Prioridade
         <select id="prioridade" required>
           <option value="Alta">Alta</option>
-          <option value="Média">Média</option>
+          <option value="Média" selected>Média</option>
           <option value="Baixa">Baixa</option>
         </select>
       </label>
-      <label>Status
+      <label for="status">Status
         <select id="status" required>
           <option value="Aberto">Aberto</option>
-          <option value="Em andamento">Em andamento</option>
           <option value="Fechado">Fechado</option>
-          <option value="Pendente">Pendente</option>
         </select>
       </label>
-      <label class="full">Descrição
+      <label for="descricao" class="full">Descrição
         <textarea id="descricao" rows="3" placeholder="Descreva o problema..." required></textarea>
       </label>
       <button class="btn primary">Salvar</button>
@@ -48,23 +47,32 @@
     </form>
   </section>
 
+  <!-- Tabela de chamados -->
   <section class="panel">
     <h2>Lista de Chamados</h2>
     <div class="toolbar">
       <input id="filtroBusca" placeholder="Buscar por título..." />
       <select id="filtroStatus">
         <option value="">Status (todos)</option>
-        <option>Aberto</option><option>Em andamento</option><option>Fechado</option><option>Pendente</option>
+        <option value="Aberto">Aberto</option>
+        <option value="Fechado">Fechado</option>
       </select>
       <select id="filtroPrioridade">
         <option value="">Prioridade (todas)</option>
-        <option>Alta</option><option>Média</option><option>Baixa</option>
+        <option value="Alta">Alta</option>
+        <option value="Média">Média</option>
+        <option value="Baixa">Baixa</option>
       </select>
     </div>
     <table class="table" id="tblChamados">
       <thead>
         <tr>
-          <th>Título</th><th>Prioridade</th><th>Status</th><th>Criado por</th><th>Criado em</th><th>Ações</th>
+          <th>Título</th>
+          <th>Prioridade</th>
+          <th>Status</th>
+          <th>Criado por</th>
+          <th>Criado em</th>
+          <th>Ações</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -73,12 +81,15 @@
 </main>
 
 <script type="module">
-  import { requireAuth, logout } from "../services/auth_rtdb.js";
-  import { createChamado, listChamados, updateChamado, deleteChamado } from "../services/chamados.js";
-  import { formatDate, toast } from "../assets/utils.js";
+  import { requireAuth, logout } from "./services/auth.js";
+  import { createChamado, listChamados, updateChamado, deleteChamado } from "./services/chamados.js";
+  import { formatDate, toast } from "./assets/utils.js";
 
   const user = requireAuth();
-  document.getElementById("logoutBtn").addEventListener("click", () => { logout(); window.location.href="./index.html"; });
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    logout();
+    window.location.href = "./index.html";
+  });
 
   const form = document.getElementById("formChamado");
   const tbody = document.querySelector("#tblChamados tbody");
@@ -122,12 +133,13 @@
     try {
       if (id) {
         await updateChamado(id, payload);
-        toast("Chamado atualizado ✔️","success");
+        toast("Chamado atualizado ✔️", "success");
       } else {
         await createChamado(payload);
-        toast("Chamado criado ✔️","success");
+        toast("Chamado criado ✔️", "success");
       }
-      form.reset(); document.getElementById("chamadoId").value = "";
+      form.reset();
+      document.getElementById("chamadoId").value = "";
       await preencherTabela();
     } catch (err) {
       toast(err.message, "error");
@@ -135,7 +147,8 @@
   });
 
   document.getElementById("btnCancelar").addEventListener("click", () => {
-    form.reset(); document.getElementById("chamadoId").value = "";
+    form.reset();
+    document.getElementById("chamadoId").value = "";
   });
 
   tbody.addEventListener("click", async (e) => {
@@ -143,19 +156,17 @@
     if (!btn) return;
     const id = btn.dataset.edit || btn.dataset.del;
     if (btn.dataset.edit) {
-      // carrega dados na UI (básico; para descrição fiel, busque do DB pelo id)
-      const row = Array.from(tbody.children).find(tr => tr.querySelector(`[data-edit="${id}"]`));
-      const [titulo, prioridade, status] = Array.from(row.children).slice(0,3).map(td => td.textContent.trim());
-      document.getElementById("titulo").value = titulo;
-      document.getElementById("prioridade").value = prioridade;
-      document.getElementById("status").value = status;
-      document.getElementById("descricao").value = "";
+      const row = btn.closest("tr").children;
+      document.getElementById("titulo").value = row[0].textContent.trim();
+      document.getElementById("prioridade").value = row[1].textContent.trim();
+      document.getElementById("status").value = row[2].textContent.trim();
+      document.getElementById("descricao").value = ""; // descrição completa só no DB
       document.getElementById("chamadoId").value = id;
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else if (btn.dataset.del) {
       if (confirm("Deseja excluir este chamado?")) {
         await deleteChamado(id);
-        toast("Chamado excluído","info");
+        toast("Chamado excluído", "info");
         await preencherTabela();
       }
     }
