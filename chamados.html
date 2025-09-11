@@ -5,6 +5,10 @@
   <title>Chamados • SPS</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="./assets/style.css" />
+  <style>
+    .req::after { content:" *"; color:#ef4444; font-weight:700; }
+    .hint { font-size:.85rem; color: var(--muted); }
+  </style>
 </head>
 <body>
 <header class="topbar">
@@ -18,60 +22,78 @@
 </header>
 
 <main class="container">
-  <!-- Formulário de criação/edição -->
+  <!-- FORM: conforme especificação -->
   <section class="panel">
     <h2>Novo Chamado</h2>
-    <form id="formChamado" class="grid form">
+    <form id="formChamado" class="grid form" autocomplete="off">
       <input type="hidden" id="chamadoId" />
-      <label for="titulo">Título
-        <input id="titulo" required />
+
+      <label>Data
+        <input id="data" type="datetime-local" />
+        <span class="hint">Se vazio, usa a data atual.</span>
       </label>
-      <label for="prioridade">Prioridade
-        <select id="prioridade" required>
-          <option value="Alta">Alta</option>
-          <option value="Média" selected>Média</option>
-          <option value="Baixa">Baixa</option>
-        </select>
+
+      <label>Analista
+        <input id="analista" type="text" readonly />
       </label>
-      <label for="status">Status
-        <select id="status" required>
-          <option value="Aberto">Aberto</option>
-          <option value="Fechado">Fechado</option>
-        </select>
+
+      <label class="req">Chamado
+        <input id="chamado" type="text" placeholder="Título do chamado" required />
       </label>
-      <label for="descricao" class="full">Descrição
-        <textarea id="descricao" rows="3" placeholder="Descreva o problema..." required></textarea>
+
+      <label class="req">Linha/MSISDN
+        <input id="msisdn" type="text" inputmode="numeric" maxlength="11" placeholder="Ex.: 11987654321" required />
+        <span class="hint">Deve conter 11 dígitos numéricos (DDD + número).</span>
       </label>
+
+      <label>Tipo Equipamento
+        <select id="equipamentoSelect"></select>
+        <input id="equipamentoOutro" placeholder="Outro equipamento" style="display:none" />
+        <span class="hint">Escolha da lista do banco. Use “Outro…” para digitar.</span>
+      </label>
+
+      <label>Cenário
+        <select id="cenarioSelect"></select>
+        <input id="cenarioOutro" placeholder="Outro cenário" style="display:none" />
+        <span class="hint">Lista vinda do banco (valores existentes).</span>
+      </label>
+
+      <label>Erro
+        <input id="erro" type="text" placeholder="Código/descrição do erro" />
+      </label>
+
+      <label class="full">Detalhes
+        <textarea id="detalhes" rows="3" maxlength="300" placeholder="(opcional, até 300 caracteres)"></textarea>
+      </label>
+
       <button class="btn primary">Salvar</button>
       <button type="button" id="btnCancelar" class="btn">Cancelar</button>
     </form>
   </section>
 
-  <!-- Tabela de chamados -->
+  <!-- LISTA -->
   <section class="panel">
     <h2>Lista de Chamados</h2>
     <div class="toolbar">
-      <input id="filtroBusca" placeholder="Buscar por título..." />
+      <input id="filtroBusca" placeholder="Buscar por chamado, MSISDN, erro..." />
       <select id="filtroStatus">
         <option value="">Status (todos)</option>
         <option value="Aberto">Aberto</option>
         <option value="Fechado">Fechado</option>
       </select>
-      <select id="filtroPrioridade">
-        <option value="">Prioridade (todas)</option>
-        <option value="Alta">Alta</option>
-        <option value="Média">Média</option>
-        <option value="Baixa">Baixa</option>
-      </select>
     </div>
+
     <table class="table" id="tblChamados">
       <thead>
         <tr>
-          <th>Título</th>
-          <th>Prioridade</th>
-          <th>Status</th>
-          <th>Criado por</th>
-          <th>Criado em</th>
+          <th>Data</th>
+          <th>Analista</th>
+          <th>Chamado</th>
+          <th>Linha/MSISDN</th>
+          <th>Equipamento</th>
+          <th>Cenário</th>
+          <th>Erro</th>
+          <th>Detalhes</th>
           <th>Ações</th>
         </tr>
       </thead>
@@ -86,33 +108,104 @@
   import { formatDate, toast } from "./assets/utils.js";
 
   const user = requireAuth();
-  document.getElementById("logoutBtn").addEventListener("click", () => {
-    logout();
-    window.location.href = "./index.html";
-  });
+  document.getElementById("logoutBtn").addEventListener("click", () => { logout(); window.location.href="./index.html"; });
 
+  // ---------- UI Refs ----------
   const form = document.getElementById("formChamado");
   const tbody = document.querySelector("#tblChamados tbody");
+  const inId = document.getElementById("chamadoId");
+  const inData = document.getElementById("data");
+  const inAnalista = document.getElementById("analista");
+  const inChamado = document.getElementById("chamado");
+  const inMSISDN = document.getElementById("msisdn");
+  const selEquip = document.getElementById("equipamentoSelect");
+  const inEqOutro = document.getElementById("equipamentoOutro");
+  const selCen = document.getElementById("cenarioSelect");
+  const inCenOutro = document.getElementById("cenarioOutro");
+  const inErro = document.getElementById("erro");
+  const inDetalhes = document.getElementById("detalhes");
 
+  // Preenche analista com sessão
+  inAnalista.value = user?.username || "-";
+
+  // ---------- Helpers ----------
+  const onlyDigits = (s) => (s || "").replace(/\D+/g,"");
+  function validarMSISDN(v) {
+    const d = onlyDigits(v);
+    return d.length === 11;
+  }
+  function getEquipValue() {
+    return selEquip.value === "__outro__" ? (inEqOutro.value || "").trim() : selEquip.value;
+  }
+  function getCenarioValue() {
+    return selCen.value === "__outro__" ? (inCenOutro.value || "").trim() : selCen.value;
+  }
+
+  // Mostrar/esconder campos "Outro..."
+  function toggleOutro(selectEl, inputEl) {
+    if (selectEl.value === "__outro__") { inputEl.style.display = ""; inputEl.focus(); }
+    else { inputEl.style.display = "none"; inputEl.value = ""; }
+  }
+  selEquip.addEventListener("change", () => toggleOutro(selEquip, inEqOutro));
+  selCen.addEventListener("change", () => toggleOutro(selCen, inCenOutro));
+
+  // ---------- Carregar listas (valores do banco) ----------
+  async function carregarListas() {
+    // Coleta valores distintos existentes
+    const todos = await listChamados();
+    const eqSet = new Set();
+    const cenSet = new Set();
+    for (const c of todos) {
+      if (c.criadoPor?.username) {} // apenas para evitar lints
+      if (c.hasOwnProperty("descricao")) {}
+      // mapeia de acordo com RTDB: em services/chamados.js guardamos 'equipamento' e 'linha' via update
+      // na UI recebemos estes campos ao listar (via mapToUI)
+      if (c.equipamento) eqSet.add(c.equipamento);
+      if (c.cenario || /Cenário:\s*(.+)/i.test(c.descricao||"")) {
+        // tenta extrair de descricao quando necessário
+        const direto = c.cenario;
+        if (direto) cenSet.add(direto);
+        const m = (c.descricao||"").match(/Cenário:\s*([^•]+)/i);
+        if (m && m[1]) cenSet.add(m[1].trim());
+      }
+    }
+    // fallback se vazio
+    if (eqSet.size === 0) ["Roteador","ONU","Modem","Switch"].forEach(v=>eqSet.add(v));
+    if (cenSet.size === 0) ["Instalação","Intermitência","Sem Sinal","Lentidão"].forEach(v=>cenSet.add(v));
+
+    const mk = (arr) => arr.map(v => `<option value="${v}">${v}</option>`).join("");
+    selEquip.innerHTML = `<option value="">(selecione)</option>${mk([...eqSet])}<option value="__outro__">Outro…</option>`;
+    selCen.innerHTML = `<option value="">(selecione)</option>${mk([...cenSet])}<option value="__outro__">Outro…</option>`;
+  }
+
+  // ---------- Tabela ----------
   async function preencherTabela() {
     const busca = document.getElementById("filtroBusca").value.trim().toLowerCase();
     const status = document.getElementById("filtroStatus").value;
-    const prioridade = document.getElementById("filtroPrioridade").value;
 
-    const data = await listChamados({ busca, status, prioridade });
+    const data = await listChamados({ busca, status });
     tbody.innerHTML = "";
     if (!data.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="muted">Sem registros</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" class="muted">Sem registros</td></tr>`;
       return;
     }
     for (const c of data) {
+      // tentar extrair cenário e erro do campo descricao quando necessário
+      const desc = c.descricao || "";
+      const mC = desc.match(/Cenário:\s*([^•]+)/i); const cen = c.cenario || (mC && mC[1] ? mC[1].trim() : "");
+      const mE = desc.match(/Erro:\s*([^•]+)/i); const err = c.erro || (mE && mE[1] ? mE[1].trim() : "");
+      const detalhes = desc.replace(/(Cenário:[^•]+|Erro:[^•]+)(?:\s*•\s*)?/gi,"").trim();
+
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${c.titulo}</td>
-        <td><span class="pill ${c.prioridade}">${c.prioridade}</span></td>
-        <td>${c.status}</td>
-        <td>${c.criadoPor?.username || "-"}</td>
         <td>${formatDate(c.criadoEm)}</td>
+        <td>${c.criadoPor?.username || "-"}</td>
+        <td>${c.titulo || "-"}</td>
+        <td>${c.msisdn || c.linha || "-"}</td>
+        <td>${c.equipamento || "-"}</td>
+        <td>${cen || "-"}</td>
+        <td>${err || "-"}</td>
+        <td title="${detalhes}">${detalhes || "-"}</td>
         <td>
           <button class="btn xs" data-edit="${c.id}">Editar</button>
           <button class="btn xs danger" data-del="${c.id}">Excluir</button>
@@ -121,63 +214,121 @@
     }
   }
 
+  // ---------- Submit ----------
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const payload = {
-      titulo: document.getElementById("titulo").value.trim(),
-      descricao: document.getElementById("descricao").value.trim(),
-      prioridade: document.getElementById("prioridade").value,
-      status: document.getElementById("status").value
+    // validações
+    const msisdn = onlyDigits(inMSISDN.value);
+    if (!validarMSISDN(msisdn)) {
+      toast("MSISDN deve ter 11 dígitos numéricos.", "error");
+      inMSISDN.focus(); return;
+    }
+    if (!inChamado.value.trim()) {
+      toast("Campo 'Chamado' é obrigatório.", "error");
+      inChamado.focus(); return;
+    }
+
+    const equipamento = getEquipValue();
+    const cenario = getCenarioValue();
+    const erro = inErro.value.trim();
+    const detalhes = inDetalhes.value.trim();
+
+    // Monta descricao compacta com Cenário/Erro/Detalhes
+    const partes = [];
+    if (cenario) partes.push(`Cenário: ${cenario}`);
+    if (erro) partes.push(`Erro: ${erro}`);
+    if (detalhes) partes.push(detalhes);
+    const descricao = partes.join(" • ");
+
+    const base = {
+      titulo: inChamado.value.trim(),
+      descricao,
+      prioridade: "Média",
+      status: "Aberto"
     };
-    const id = document.getElementById("chamadoId").value;
+
+    const id = inId.value;
+
     try {
       if (id) {
-        await updateChamado(id, payload);
+        await updateChamado(id, {
+          titulo: base.titulo,
+          descricao: base.descricao,
+          equipamento,
+          linha: msisdn,
+          cenario
+        });
         toast("Chamado atualizado ✔️", "success");
       } else {
-        await createChamado(payload);
+        // cria e, em seguida, complementa com campos específicos do RTDB
+        const novo = await createChamado(base);
+        await updateChamado(novo.id, { equipamento, linha: msisdn, cenario });
         toast("Chamado criado ✔️", "success");
       }
-      form.reset();
-      document.getElementById("chamadoId").value = "";
+
+      form.reset(); inId.value = "";
+      inAnalista.value = user?.username || "-";
       await preencherTabela();
+      await carregarListas();
     } catch (err) {
-      toast(err.message, "error");
+      toast(err.message || "Erro ao salvar", "error");
     }
   });
 
+  // Cancelar
   document.getElementById("btnCancelar").addEventListener("click", () => {
-    form.reset();
-    document.getElementById("chamadoId").value = "";
+    form.reset(); inId.value = ""; inAnalista.value = user?.username || "-";
+    inEqOutro.style.display = "none"; inCenOutro.style.display = "none";
   });
 
+  // Editar/Excluir
   tbody.addEventListener("click", async (e) => {
-    const btn = e.target.closest("button");
-    if (!btn) return;
+    const btn = e.target.closest("button"); if (!btn) return;
     const id = btn.dataset.edit || btn.dataset.del;
+
     if (btn.dataset.edit) {
+      // Para preencher corretamente, seria ideal buscar o item no DB.
+      // Como aqui temos apenas os valores renderizados, usamos a linha da tabela:
       const row = btn.closest("tr").children;
-      document.getElementById("titulo").value = row[0].textContent.trim();
-      document.getElementById("prioridade").value = row[1].textContent.trim();
-      document.getElementById("status").value = row[2].textContent.trim();
-      document.getElementById("descricao").value = ""; // descrição completa só no DB
-      document.getElementById("chamadoId").value = id;
+      inId.value = id;
+      inChamado.value = row[2].textContent.trim();
+      inMSISDN.value = row[3].textContent.trim();
+
+      // equipamento
+      const eq = row[4].textContent.trim();
+      if ([...selEquip.options].some(o => o.value === eq)) {
+        selEquip.value = eq; inEqOutro.style.display = "none"; inEqOutro.value = "";
+      } else { selEquip.value = "__outro__"; inEqOutro.style.display = ""; inEqOutro.value = eq; }
+
+      // cenário
+      const cen = row[5].textContent.trim();
+      if ([...selCen.options].some(o => o.value === cen)) {
+        selCen.value = cen; inCenOutro.style.display = "none"; inCenOutro.value = "";
+      } else { selCen.value = "__outro__"; inCenOutro.style.display = ""; inCenOutro.value = cen; }
+
+      inErro.value = row[6].textContent.trim() === "-" ? "" : row[6].textContent.trim();
+      inDetalhes.value = row[7].getAttribute("title") || "";
+
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else if (btn.dataset.del) {
-      if (confirm("Deseja excluir este chamado?")) {
+      if (confirm("Excluir este chamado?")) {
         await deleteChamado(id);
         toast("Chamado excluído", "info");
         await preencherTabela();
+        await carregarListas();
       }
     }
   });
 
-  ["filtroBusca","filtroStatus","filtroPrioridade"].forEach(id => {
+  // Filtros
+  ["filtroBusca","filtroStatus"].forEach(id => {
     document.getElementById(id).addEventListener("input", preencherTabela);
     document.getElementById(id).addEventListener("change", preencherTabela);
   });
 
-  preencherTabela();
+  // Boot
+  await carregarListas();
+  await preencherTabela();
 </script>
 </body>
 </html>
