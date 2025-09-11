@@ -8,6 +8,19 @@
   <style>
     .req::after { content:" *"; color:#ef4444; font-weight:700; }
     .hint { font-size:.85rem; color: var(--muted); }
+    .icon-btn { background: transparent; border: none; cursor: pointer; color: var(--text); }
+    .tooltip { position: relative; }
+    .tooltip[data-tip]:hover::after {
+      content: attr(data-tip);
+      position: absolute; left: 50%; transform: translateX(-50%); bottom: 120%;
+      white-space: pre-wrap; max-width: 320px; padding: .5rem .7rem;
+      background: #0b1020; border:1px solid var(--border); border-radius: 10px;
+      color: var(--text); box-shadow: 0 8px 20px rgba(0,0,0,.35); z-index: 50;
+    }
+    @media (max-width: 700px){
+      .toolbar { flex-direction: column; align-items: stretch; }
+      .toolbar > * { width: 100%; }
+    }
   </style>
 </head>
 <body>
@@ -22,48 +35,45 @@
 </header>
 
 <main class="container">
-  <!-- FORM: conforme especificação -->
+  <!-- Formulário -->
   <section class="panel">
     <h2>Novo Chamado</h2>
     <form id="formChamado" class="grid form" autocomplete="off">
       <input type="hidden" id="chamadoId" />
 
-      <label>Data
-        <input id="data" type="datetime-local" />
-        <span class="hint">Se vazio, usa a data atual.</span>
-      </label>
-
+      <!-- Linha 1: Analista > Data/Hora -->
       <label>Analista
         <input id="analista" type="text" readonly />
       </label>
+      <label>Data/Hora
+        <input id="data" type="datetime-local" />
+        <span class="hint">Se vazio, usa a data/hora atual.</span>
+      </label>
 
+      <!-- Linha 2: Chamado > MSISDN -->
       <label class="req">Chamado
         <input id="chamado" type="text" placeholder="Título do chamado" required />
       </label>
-
-      <label class="req">Linha/MSISDN
+      <label class="req">MSISDN
         <input id="msisdn" type="text" inputmode="numeric" maxlength="11" placeholder="Ex.: 11987654321" required />
-        <span class="hint">Deve conter 11 dígitos numéricos (DDD + número).</span>
+        <span class="hint">11 dígitos numéricos (DDD+número).</span>
       </label>
 
-      <label>Tipo Equipamento
+      <!-- Linha 3: Equipamento > Cenário -->
+      <label>Equipamento
         <select id="equipamentoSelect"></select>
         <input id="equipamentoOutro" placeholder="Outro equipamento" style="display:none" />
-        <span class="hint">Escolha da lista do banco. Use “Outro…” para digitar.</span>
+        <span class="hint">Carregado de <code>app/equipamento</code>.</span>
       </label>
-
       <label>Cenário
         <select id="cenarioSelect"></select>
         <input id="cenarioOutro" placeholder="Outro cenário" style="display:none" />
-        <span class="hint">Lista vinda do banco (valores existentes).</span>
+        <span class="hint">De <code>app/cenarios</code> (se existir); senão, inferido.</span>
       </label>
 
-      <label>Erro
-        <input id="erro" type="text" placeholder="Código/descrição do erro" />
-      </label>
-
-      <label class="full">Detalhes
-        <textarea id="detalhes" rows="3" maxlength="300" placeholder="(opcional, até 300 caracteres)"></textarea>
+      <!-- Linha 4: Observações -->
+      <label class="full">Observações
+        <textarea id="observacoes" rows="3" maxlength="300" placeholder="(opcional, até 300 caracteres)"></textarea>
       </label>
 
       <button class="btn primary">Salvar</button>
@@ -71,16 +81,30 @@
     </form>
   </section>
 
-  <!-- LISTA -->
+  <!-- Lista + filtros + Export CSV -->
   <section class="panel">
     <h2>Lista de Chamados</h2>
-    <div class="toolbar">
-      <input id="filtroBusca" placeholder="Buscar por chamado, MSISDN, erro..." />
-      <select id="filtroStatus">
-        <option value="">Status (todos)</option>
-        <option value="Aberto">Aberto</option>
-        <option value="Fechado">Fechado</option>
-      </select>
+
+    <div class="toolbar" style="display:flex; gap:.5rem; align-items:end; flex-wrap:wrap;">
+      <label style="flex:1; min-width: 220px;">Busca (texto)
+        <input id="filtroBusca" placeholder="msisdn, chamado, analista, equipamento..." />
+      </label>
+      <label>De
+        <input id="filtroDataIni" type="datetime-local" />
+      </label>
+      <label>Até
+        <input id="filtroDataFim" type="datetime-local" />
+      </label>
+      <label>Status
+        <select id="filtroStatus">
+          <option value="">(todos)</option>
+          <option value="Aberto">Aberto</option>
+          <option value="Fechado">Fechado</option>
+        </select>
+      </label>
+      <button id="btnFiltrar" class="btn">Aplicar</button>
+      <button id="btnLimpar" class="btn">Limpar</button>
+      <button id="btnExportar" class="btn outline">Exportar CSV</button>
     </div>
 
     <table class="table" id="tblChamados">
@@ -92,9 +116,8 @@
           <th>Linha/MSISDN</th>
           <th>Equipamento</th>
           <th>Cenário</th>
-          <th>Erro</th>
-          <th>Detalhes</th>
-          <th>Ações</th>
+          <th>Obs.</th>
+          <th style="width:160px">Ações</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -106,42 +129,49 @@
   import { requireAuth, logout } from "./services/auth.js";
   import { createChamado, listChamados, updateChamado, deleteChamado } from "./services/chamados.js";
   import { formatDate, toast } from "./assets/utils.js";
+  import { rtdb } from "./config/firebase_config.js";
+  import { ref, get, child } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
-  const user = requireAuth();
+  // sessão & role
+  const session = requireAuth();
+  const isAdmin = session?.role === "admin";
+  const currentUser = session?.username || "-";
   document.getElementById("logoutBtn").addEventListener("click", () => { logout(); window.location.href="./index.html"; });
 
-  // ---------- UI Refs ----------
+  // refs
   const form = document.getElementById("formChamado");
-  const tbody = document.querySelector("#tblChamados tbody");
   const inId = document.getElementById("chamadoId");
-  const inData = document.getElementById("data");
   const inAnalista = document.getElementById("analista");
+  const inData = document.getElementById("data");
   const inChamado = document.getElementById("chamado");
   const inMSISDN = document.getElementById("msisdn");
   const selEquip = document.getElementById("equipamentoSelect");
   const inEqOutro = document.getElementById("equipamentoOutro");
   const selCen = document.getElementById("cenarioSelect");
   const inCenOutro = document.getElementById("cenarioOutro");
-  const inErro = document.getElementById("erro");
-  const inDetalhes = document.getElementById("detalhes");
+  const inObs = document.getElementById("observacoes");
 
-  // Preenche analista com sessão
-  inAnalista.value = user?.username || "-";
+  const tbody = document.querySelector("#tblChamados tbody");
+  const filtroBusca = document.getElementById("filtroBusca");
+  const filtroDataIni = document.getElementById("filtroDataIni");
+  const filtroDataFim = document.getElementById("filtroDataFim");
+  const filtroStatus = document.getElementById("filtroStatus");
+  document.getElementById("btnFiltrar").addEventListener("click", preencherTabela);
+  document.getElementById("btnLimpar").addEventListener("click", () => {
+    filtroBusca.value = ""; filtroDataIni.value = ""; filtroDataFim.value = ""; filtroStatus.value = "";
+    preencherTabela();
+  });
+  document.getElementById("btnExportar").addEventListener("click", exportarCSV);
 
-  // ---------- Helpers ----------
+  // estado
+  inAnalista.value = currentUser;
+
+  // utils
   const onlyDigits = (s) => (s || "").replace(/\D+/g,"");
-  function validarMSISDN(v) {
-    const d = onlyDigits(v);
-    return d.length === 11;
-  }
-  function getEquipValue() {
-    return selEquip.value === "__outro__" ? (inEqOutro.value || "").trim() : selEquip.value;
-  }
-  function getCenarioValue() {
-    return selCen.value === "__outro__" ? (inCenOutro.value || "").trim() : selCen.value;
-  }
+  const validarMSISDN = (v) => onlyDigits(v).length === 11;
+  const parseDTLocal = (v) => { if (!v) return null; const d = new Date(v); return isNaN(d) ? null : d.getTime(); };
+  const toDTLocalValue = (ms) => { const d=new Date(ms); const pad=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 
-  // Mostrar/esconder campos "Outro..."
   function toggleOutro(selectEl, inputEl) {
     if (selectEl.value === "__outro__") { inputEl.style.display = ""; inputEl.focus(); }
     else { inputEl.style.display = "none"; inputEl.value = ""; }
@@ -149,100 +179,105 @@
   selEquip.addEventListener("change", () => toggleOutro(selEquip, inEqOutro));
   selCen.addEventListener("change", () => toggleOutro(selCen, inCenOutro));
 
-  // ---------- Carregar listas (valores do banco) ----------
+  // carregar listas (equipamento de app/equipamento; cenário de app/cenarios se existir; senão infere)
   async function carregarListas() {
-    // Coleta valores distintos existentes
-    const todos = await listChamados();
-    const eqSet = new Set();
-    const cenSet = new Set();
-    for (const c of todos) {
-      if (c.criadoPor?.username) {} // apenas para evitar lints
-      if (c.hasOwnProperty("descricao")) {}
-      // mapeia de acordo com RTDB: em services/chamados.js guardamos 'equipamento' e 'linha' via update
-      // na UI recebemos estes campos ao listar (via mapToUI)
-      if (c.equipamento) eqSet.add(c.equipamento);
-      if (c.cenario || /Cenário:\s*(.+)/i.test(c.descricao||"")) {
-        // tenta extrair de descricao quando necessário
-        const direto = c.cenario;
-        if (direto) cenSet.add(direto);
-        const m = (c.descricao||"").match(/Cenário:\s*([^•]+)/i);
-        if (m && m[1]) cenSet.add(m[1].trim());
-      }
+    // equipamentos
+    const eqSnap = await get(child(ref(rtdb), "app/equipamento"));
+    const eqArr = eqSnap.exists() ? Object.values(eqSnap.val()).map(String).filter(Boolean) : [];
+    if (eqArr.length === 0) eqArr.push("Roteador","ONU","Modem","Switch");
+
+    // cenários
+    let cenArr = [];
+    const cenSnap = await get(child(ref(rtdb), "app/cenarios"));
+    if (cenSnap.exists()) cenArr = Object.values(cenSnap.val()).map(String).filter(Boolean);
+    if (cenArr.length === 0) {
+      const todos = await listChamados();
+      const s = new Set();
+      for (const c of todos) { if (c.cenario) s.add(c.cenario); }
+      cenArr = [...s];
+      if (cenArr.length === 0) cenArr.push("Instalação","Intermitência","Sem Sinal","Lentidão");
     }
-    // fallback se vazio
-    if (eqSet.size === 0) ["Roteador","ONU","Modem","Switch"].forEach(v=>eqSet.add(v));
-    if (cenSet.size === 0) ["Instalação","Intermitência","Sem Sinal","Lentidão"].forEach(v=>cenSet.add(v));
 
     const mk = (arr) => arr.map(v => `<option value="${v}">${v}</option>`).join("");
-    selEquip.innerHTML = `<option value="">(selecione)</option>${mk([...eqSet])}<option value="__outro__">Outro…</option>`;
-    selCen.innerHTML = `<option value="">(selecione)</option>${mk([...cenSet])}<option value="__outro__">Outro…</option>`;
+    selEquip.innerHTML = `<option value="">(selecione)</option>${mk(eqArr)}<option value="__outro__">Outro…</option>`;
+    selCen.innerHTML = `<option value="">(selecione)</option>${mk(cenArr)}<option value="__outro__">Outro…</option>`;
   }
 
-  // ---------- Tabela ----------
+  // preencher tabela com filtros e permissões
   async function preencherTabela() {
-    const busca = document.getElementById("filtroBusca").value.trim().toLowerCase();
-    const status = document.getElementById("filtroStatus").value;
+    const busca = filtroBusca.value.trim().toLowerCase();
+    const status = filtroStatus.value;
+    const dtIni = parseDTLocal(filtroDataIni.value);
+    const dtFim = parseDTLocal(filtroDataFim.value);
 
     const data = await listChamados({ busca, status });
+    const filtered = data.filter(c => {
+      const created = Number(c.criadoEm || 0);
+      if (dtIni && created < dtIni) return false;
+      if (dtFim && created > dtFim) return false;
+
+      // estender busca textual para msisdn/analista/equipamento/chamado
+      const bucket = [
+        c.titulo, c.linha || c.msisdn, c.criadoPor?.username, c.equipamento
+      ].map(v => String(v||"").toLowerCase()).join("|");
+      if (busca && !bucket.includes(busca)) return false;
+
+      return true;
+    });
+
     tbody.innerHTML = "";
-    if (!data.length) {
-      tbody.innerHTML = `<tr><td colspan="9" class="muted">Sem registros</td></tr>`;
+    if (!filtered.length) {
+      tbody.innerHTML = `<tr><td colspan="8" class="muted">Sem registros</td></tr>`;
       return;
     }
-    for (const c of data) {
-      // tentar extrair cenário e erro do campo descricao quando necessário
-      const desc = c.descricao || "";
-      const mC = desc.match(/Cenário:\s*([^•]+)/i); const cen = c.cenario || (mC && mC[1] ? mC[1].trim() : "");
-      const mE = desc.match(/Erro:\s*([^•]+)/i); const err = c.erro || (mE && mE[1] ? mE[1].trim() : "");
-      const detalhes = desc.replace(/(Cenário:[^•]+|Erro:[^•]+)(?:\s*•\s*)?/gi,"").trim();
 
+    for (const c of filtered) {
+      const obs = c.descricao || "";
+      const canEdit = isAdmin || (c.criadoPor?.username === currentUser);
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${formatDate(c.criadoEm)}</td>
         <td>${c.criadoPor?.username || "-"}</td>
         <td>${c.titulo || "-"}</td>
-        <td>${c.msisdn || c.linha || "-"}</td>
+        <td>${c.linha || c.msisdn || "-"}</td>
         <td>${c.equipamento || "-"}</td>
-        <td>${cen || "-"}</td>
-        <td>${err || "-"}</td>
-        <td title="${detalhes}">${detalhes || "-"}</td>
+        <td>${c.cenario || "-"}</td>
         <td>
-          <button class="btn xs" data-edit="${c.id}">Editar</button>
-          <button class="btn xs danger" data-del="${c.id}">Excluir</button>
+          ${obs ? `<button class="icon-btn tooltip" data-tip="${obs.replace(/"/g,'&quot;')}" data-copy="${obs}" title="Copiar observação" aria-label="Observação">📋</button>` : `<span class="muted">—</span>`}
+        </td>
+        <td>
+          <button class="btn xs" data-edit="${c.id}" ${canEdit ? "" : "disabled"}>Editar</button>
+          ${isAdmin ? `<button class="btn xs danger" data-del="${c.id}">Excluir</button>` : ""}
         </td>`;
       tbody.appendChild(tr);
     }
   }
 
-  // ---------- Submit ----------
+  // copiar observação
+  tbody.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button.icon-btn");
+    if (!btn) return;
+    const txt = btn.getAttribute("data-copy") || "";
+    try { await navigator.clipboard.writeText(txt); toast("Observação copiada!", "success"); }
+    catch { toast("Falha ao copiar.", "error"); }
+  });
+
+  // submit: cria/atualiza com descricao salva no RTDB
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    // validações
+
     const msisdn = onlyDigits(inMSISDN.value);
-    if (!validarMSISDN(msisdn)) {
-      toast("MSISDN deve ter 11 dígitos numéricos.", "error");
-      inMSISDN.focus(); return;
-    }
-    if (!inChamado.value.trim()) {
-      toast("Campo 'Chamado' é obrigatório.", "error");
-      inChamado.focus(); return;
-    }
+    if (!validarMSISDN(msisdn)) { toast("MSISDN deve ter 11 dígitos.", "error"); inMSISDN.focus(); return; }
+    if (!inChamado.value.trim()) { toast("Campo 'Chamado' é obrigatório.", "error"); inChamado.focus(); return; }
 
-    const equipamento = getEquipValue();
-    const cenario = getCenarioValue();
-    const erro = inErro.value.trim();
-    const detalhes = inDetalhes.value.trim();
-
-    // Monta descricao compacta com Cenário/Erro/Detalhes
-    const partes = [];
-    if (cenario) partes.push(`Cenário: ${cenario}`);
-    if (erro) partes.push(`Erro: ${erro}`);
-    if (detalhes) partes.push(detalhes);
-    const descricao = partes.join(" • ");
+    const equipamento = selEquip.value === "__outro__" ? (inEqOutro.value||"").trim() : selEquip.value;
+    const cenario = selCen.value === "__outro__" ? (inCenOutro.value||"").trim() : selCen.value;
+    const descricao = inObs.value.trim();
+    const chosen = parseDTLocal(inData.value); // pode ser null
 
     const base = {
       titulo: inChamado.value.trim(),
-      descricao,
+      descricao,                // <- Observações salvas no banco
       prioridade: "Média",
       status: "Aberto"
     };
@@ -254,20 +289,21 @@
         await updateChamado(id, {
           titulo: base.titulo,
           descricao: base.descricao,
-          equipamento,
-          linha: msisdn,
-          cenario
+          equipamento, linha: msisdn, cenario,
+          ...(chosen ? { createdAt: chosen } : {})
         });
         toast("Chamado atualizado ✔️", "success");
       } else {
-        // cria e, em seguida, complementa com campos específicos do RTDB
         const novo = await createChamado(base);
-        await updateChamado(novo.id, { equipamento, linha: msisdn, cenario });
+        await updateChamado(novo.id, {
+          equipamento, linha: msisdn, cenario,
+          ...(chosen ? { createdAt: chosen } : {})
+        });
         toast("Chamado criado ✔️", "success");
       }
 
-      form.reset(); inId.value = "";
-      inAnalista.value = user?.username || "-";
+      form.reset(); inId.value = ""; inAnalista.value = currentUser;
+      inEqOutro.style.display="none"; inCenOutro.style.display="none";
       await preencherTabela();
       await carregarListas();
     } catch (err) {
@@ -275,42 +311,40 @@
     }
   });
 
-  // Cancelar
+  // cancelar
   document.getElementById("btnCancelar").addEventListener("click", () => {
-    form.reset(); inId.value = ""; inAnalista.value = user?.username || "-";
-    inEqOutro.style.display = "none"; inCenOutro.style.display = "none";
+    form.reset(); inId.value = ""; inAnalista.value = currentUser;
+    inEqOutro.style.display="none"; inCenOutro.style.display="none";
   });
 
-  // Editar/Excluir
+  // editar/excluir
   tbody.addEventListener("click", async (e) => {
-    const btn = e.target.closest("button"); if (!btn) return;
-    const id = btn.dataset.edit || btn.dataset.del;
+    const b = e.target.closest("button"); if (!b) return;
+    const id = b.dataset.edit || b.dataset.del;
 
-    if (btn.dataset.edit) {
-      // Para preencher corretamente, seria ideal buscar o item no DB.
-      // Como aqui temos apenas os valores renderizados, usamos a linha da tabela:
-      const row = btn.closest("tr").children;
+    if (b.dataset.edit) {
+      const row = b.closest("tr").children;
       inId.value = id;
       inChamado.value = row[2].textContent.trim();
-      inMSISDN.value = row[3].textContent.trim();
+      inMSISDN.value = (row[3].textContent.trim()).replace(/\D+/g,"");
 
-      // equipamento
       const eq = row[4].textContent.trim();
-      if ([...selEquip.options].some(o => o.value === eq)) {
-        selEquip.value = eq; inEqOutro.style.display = "none"; inEqOutro.value = "";
-      } else { selEquip.value = "__outro__"; inEqOutro.style.display = ""; inEqOutro.value = eq; }
+      if ([...selEquip.options].some(o=>o.value===eq)) { selEquip.value = eq; inEqOutro.style.display="none"; inEqOutro.value=""; }
+      else { selEquip.value="__outro__"; inEqOutro.style.display=""; inEqOutro.value = eq; }
 
-      // cenário
       const cen = row[5].textContent.trim();
-      if ([...selCen.options].some(o => o.value === cen)) {
-        selCen.value = cen; inCenOutro.style.display = "none"; inCenOutro.value = "";
-      } else { selCen.value = "__outro__"; inCenOutro.style.display = ""; inCenOutro.value = cen; }
+      if ([...selCen.options].some(o=>o.value===cen)) { selCen.value = cen; inCenOutro.style.display="none"; inCenOutro.value=""; }
+      else { selCen.value="__outro__"; inCenOutro.style.display=""; inCenOutro.value = cen; }
 
-      inErro.value = row[6].textContent.trim() === "-" ? "" : row[6].textContent.trim();
-      inDetalhes.value = row[7].getAttribute("title") || "";
+      // pega observações do tooltip/botão
+      const obsBtn = row[6].querySelector("button.icon-btn");
+      inObs.value = obsBtn ? (obsBtn.getAttribute("data-copy") || "") : "";
 
+      // data/hora: opcional — limpar para não confundir
+      inData.value = "";
       window.scrollTo({ top: 0, behavior: "smooth" });
-    } else if (btn.dataset.del) {
+    } else if (b.dataset.del) {
+      if (!isAdmin) return;
       if (confirm("Excluir este chamado?")) {
         await deleteChamado(id);
         toast("Chamado excluído", "info");
@@ -320,13 +354,71 @@
     }
   });
 
-  // Filtros
-  ["filtroBusca","filtroStatus"].forEach(id => {
-    document.getElementById(id).addEventListener("input", preencherTabela);
-    document.getElementById(id).addEventListener("change", preencherTabela);
+  // Exportar CSV (com filtros atuais)
+  async function exportarCSV() {
+    // aplica os mesmos filtros da tabela
+    const busca = filtroBusca.value.trim().toLowerCase();
+    const status = filtroStatus.value;
+    const dtIni = parseDTLocal(filtroDataIni.value);
+    const dtFim = parseDTLocal(filtroDataFim.value);
+    const data = await listChamados({ busca, status });
+
+    const filtered = data.filter(c => {
+      const created = Number(c.criadoEm || 0);
+      if (dtIni && created < dtIni) return false;
+      if (dtFim && created > dtFim) return false;
+
+      const bucket = [
+        c.titulo, c.linha || c.msisdn, c.criadoPor?.username, c.equipamento
+      ].map(v => String(v||"").toLowerCase()).join("|");
+      if (busca && !bucket.includes(busca)) return false;
+
+      return true;
+    });
+
+    const rows = [];
+    rows.push(["Data", "Analista", "Chamado", "MSISDN", "Equipamento", "Cenário", "Observações", "Status"]);
+    for (const c of filtered) {
+      rows.push([
+        formatDate(c.criadoEm),
+        c.criadoPor?.username || "",
+        c.titulo || "",
+        c.linha || c.msisdn || "",
+        c.equipamento || "",
+        c.cenario || "",
+        c.descricao || "",
+        c.status || ""
+      ]);
+    }
+
+    // CSV com BOM para Excel
+    const csv = "\uFEFF" + rows.map(r => r.map(cell => {
+      const s = String(cell ?? "");
+      // escapar aspas e envolver em quotes
+      return `"${s.replace(/"/g, '""')}"`;
+    }).join(",")).join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().replace(/[:.]/g,"-");
+    a.href = url;
+    a.download = `chamados_${stamp}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    toast(`Exportado ${filtered.length} registro(s)`, "success");
+  }
+
+  // filtros reativos
+  [filtroBusca, filtroStatus, filtroDataIni, filtroDataFim].forEach(el => {
+    el.addEventListener("change", preencherTabela);
+    el.addEventListener("input", (e)=>{ if (e.target !== filtroBusca) preencherTabela(); });
   });
 
-  // Boot
+  // boot
   await carregarListas();
   await preencherTabela();
 </script>
