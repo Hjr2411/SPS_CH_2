@@ -16,7 +16,7 @@
       <input id="password" type="password" placeholder="••••" autocomplete="current-password" required />
       <button type="submit" class="btn primary">Entrar</button>
     </form>
-    <p class="muted">Dica: use os usuários do RTDB (ex.: admin/admin1, user/user, helio/97616896 ...)</p>
+    <p class="muted">(primeiro nome e user 9)</p>
   </div>
 
   <script type="module">
@@ -26,7 +26,7 @@
     // Redireciona se já estiver logado
     const sess = getSession();
     if (sess) {
-      window.location.href = "./dashboard.html";
+      window.location.href = "./chamados.html";
     }
 
     const form = document.getElementById("loginForm");
@@ -37,7 +37,7 @@
       try {
         const user = await login(username, password);
         toast(`Bem-vindo, ${user.username}!`, "success");
-        window.location.href = "./dashboard.html";
+        window.location.href = "./chamados.html";
       } catch (err) {
         toast(err.message || "Falha no login", "error");
       }
