@@ -1,47 +1,35 @@
 // /services/auth.js
-// Autenticação simples usando Realtime Database em app/users
-// Estrutura esperada no RTDB:
-// app/users/<username> = { password: string, ativo: boolean, admin: boolean, nome?: string }
+// Login simples usando Realtime Database em app/users/<username>
+// Campos aceitos no nó: { password, ativo, admin, nome }
 
 import { rtdb } from "../config/firebase_config.js";
-import {
-  ref, get, child
-} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+import { ref, get, child } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
 const SESSION_KEY = "sps_session";
+const DEBUG = false; // mude p/ true se quiser ver logs no console
 
-// ---------- Sessão ----------
+// ---------- sessão ----------
 export function getSession() {
-  try { return JSON.parse(localStorage.getItem(SESSION_KEY)); }
-  catch { return null; }
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; }
 }
-export function setSession(user) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-}
-export function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
-}
-export function logout() {
-  clearSession();
-}
-
-// Proteções de rota
+export function setSession(user) { localStorage.setItem(SESSION_KEY, JSON.stringify(user)); }
+export function clearSession() { localStorage.removeItem(SESSION_KEY); }
+export function logout() { clearSession(); }
 export function requireAuth() {
-  const sess = getSession();
-  if (!sess) {
-    window.location.replace("./index.html");
-    return null;
-  }
-  return sess;
+  const s = getSession();
+  if (!s) { window.location.replace("./index.html"); return null; }
+  return s;
 }
 export function requireAdmin(user = getSession()) {
   if (!user || user.role !== "admin") {
-    alert("Acesso restrito a administradores.");
+    alert("Apenas administradores.");
     window.location.replace("./dashboard.html");
   }
 }
 
-// ---------- Helpers ----------
+// ---------- helpers ----------
+function log(...args){ if (DEBUG) console.log("[auth]", ...args); }
+
 function mapUser(usernameKey, data) {
   if (!data) return null;
   return {
@@ -53,48 +41,50 @@ function mapUser(usernameKey, data) {
   };
 }
 
-async function fetchUserByUsernameKey(usernameKey) {
+async function getUserByKey(usernameKey) {
   const snap = await get(child(ref(rtdb), `app/users/${usernameKey}`));
-  return snap.exists() ? mapUser(usernameKey, snap.val()) : null;
+  if (!snap.exists()) return null;
+  const u = mapUser(usernameKey, snap.val());
+  log("getUserByKey:", usernameKey, u);
+  return u;
 }
 
-// fallback: procurar por "nome" quando a chave do nó não for o username digitado
-async function fetchUserByNome(nome) {
+async function getUserByNome(nome) {
   const snap = await get(child(ref(rtdb), "app/users"));
   if (!snap.exists()) return null;
   const all = snap.val();
   for (const [key, val] of Object.entries(all)) {
-    if ((val?.nome || "").toLowerCase() === nome.toLowerCase()) {
-      return mapUser(key, val);
+    if ((val?.nome || "").toLowerCase() === String(nome).toLowerCase()) {
+      const u = mapUser(key, val);
+      log("getUserByNome:", nome, "->", u);
+      return u;
     }
   }
   return null;
 }
 
-// ---------- Login ----------
+// ---------- login ----------
 /**
- * login(username, password)
- * - Primeiro tenta ler app/users/<username>
- * - Se não existir, tenta localizar por campo "nome"
- * - Valida "ativo" e "password"
- * - Grava sessão minimalista: { uid, username, role }
+ * Tenta:
+ * 1) app/users/<username digitado>
+ * 2) busca por campo "nome" == username digitado (case-insensitive)
  */
 export async function login(username, password) {
   const u = String(username || "").trim();
   const p = String(password || "");
-
   if (!u || !p) throw new Error("Informe usuário e senha.");
 
-  // 1) tenta por chave do nó
-  let user = await fetchUserByUsernameKey(u);
+  // 1) chave do nó
+  let user = await getUserByKey(u);
 
-  // 2) fallback: nome
-  if (!user) user = await fetchUserByNome(u);
+  // 2) fallback por 'nome'
+  if (!user) user = await getUserByNome(u);
 
   if (!user) throw new Error("Usuário não encontrado.");
   if (!user.active) throw new Error("Usuário inativo.");
   if (user.password !== p) throw new Error("Senha inválida.");
 
   setSession({ uid: user.id, username: user.username, role: user.role });
+  log("login OK:", user);
   return user;
 }
