@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="./assets/style.css" />
   <style>
+    /* Ajustes específicos da página */
     .req::after { content:" *"; color:#ef4444; font-weight:700; }
     .hint { font-size:.85rem; color: var(--muted); }
     .icon-btn { background: transparent; border: none; cursor: pointer; color: var(--text); }
@@ -13,14 +14,14 @@
     .tooltip[data-tip]:hover::after {
       content: attr(data-tip);
       position: absolute; left: 50%; transform: translateX(-50%); bottom: 120%;
-      white-space: pre-wrap; max-width: 320px; padding: .5rem .7rem;
+      white-space: pre-wrap; max-width: 360px; padding: .6rem .8rem;
       background: #0b1020; border:1px solid var(--border); border-radius: 10px;
       color: var(--text); box-shadow: 0 8px 20px rgba(0,0,0,.35); z-index: 50;
     }
-    @media (max-width: 700px){
-      .toolbar { flex-direction: column; align-items: stretch; }
-      .toolbar > * { width: 100%; }
-    }
+    /* Grid 3×3: 3 colunas no desktop, quebra para 2 e 1 no mobile */
+    .grid.form { grid-template-columns: repeat(3, 1fr); }
+    @media (max-width: 900px){ .grid.form { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 600px){ .grid.form { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -35,44 +36,40 @@
 </header>
 
 <main class="container">
-  <!-- Formulário -->
+  <!-- FORM 3×3 -->
   <section class="panel">
     <h2>Novo Chamado</h2>
     <form id="formChamado" class="grid form" autocomplete="off">
       <input type="hidden" id="chamadoId" />
 
-      <!-- Linha 1: Analista > Data/Hora -->
+      <!-- Linha 1: Analista | Data/Hora | Chamado -->
       <label>Analista
         <input id="analista" type="text" readonly />
       </label>
       <label>Data/Hora
         <input id="data" type="datetime-local" />
-        <span class="hint">Se vazio, usa a data/hora atual.</span>
+        <span class="hint">Se vazio, usa agora.</span>
       </label>
-
-      <!-- Linha 2: Chamado > MSISDN -->
       <label class="req">Chamado
         <input id="chamado" type="text" placeholder="Título do chamado" required />
       </label>
+
+      <!-- Linha 2: MSISDN | Equipamento | Cenário -->
       <label class="req">MSISDN
         <input id="msisdn" type="text" inputmode="numeric" maxlength="11" placeholder="Ex.: 11987654321" required />
-        <span class="hint">11 dígitos numéricos (DDD+número).</span>
+        <span class="hint">11 dígitos (DDD+número).</span>
       </label>
-
-      <!-- Linha 3: Equipamento > Cenário -->
       <label>Equipamento
         <select id="equipamentoSelect"></select>
         <input id="equipamentoOutro" placeholder="Outro equipamento" style="display:none" />
-        <span class="hint">Carregado de <code>app/equipamento</code>.</span>
       </label>
       <label>Cenário
         <select id="cenarioSelect"></select>
         <input id="cenarioOutro" placeholder="Outro cenário" style="display:none" />
-        <span class="hint">De <code>app/cenarios</code> (se existir); senão, inferido.</span>
       </label>
 
-      <!-- Linha 4: Observações -->
-      <label class="full">Observações
+      <!-- Linha 3: Observações (span 3) -->
+      <label class="full" style="grid-column: 1/-1">Observações
         <textarea id="observacoes" rows="3" maxlength="300" placeholder="(opcional, até 300 caracteres)"></textarea>
       </label>
 
@@ -94,13 +91,6 @@
       </label>
       <label>Até
         <input id="filtroDataFim" type="datetime-local" />
-      </label>
-      <label>Status
-        <select id="filtroStatus">
-          <option value="">(todos)</option>
-          <option value="Aberto">Aberto</option>
-          <option value="Fechado">Fechado</option>
-        </select>
       </label>
       <button id="btnFiltrar" class="btn">Aplicar</button>
       <button id="btnLimpar" class="btn">Limpar</button>
@@ -132,13 +122,13 @@
   import { rtdb } from "./config/firebase_config.js";
   import { ref, get, child } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
-  // sessão & role
+  // Sessão/role
   const session = requireAuth();
   const isAdmin = session?.role === "admin";
   const currentUser = session?.username || "-";
   document.getElementById("logoutBtn").addEventListener("click", () => { logout(); window.location.href="./index.html"; });
 
-  // refs
+  // Refs
   const form = document.getElementById("formChamado");
   const inId = document.getElementById("chamadoId");
   const inAnalista = document.getElementById("analista");
@@ -155,22 +145,20 @@
   const filtroBusca = document.getElementById("filtroBusca");
   const filtroDataIni = document.getElementById("filtroDataIni");
   const filtroDataFim = document.getElementById("filtroDataFim");
-  const filtroStatus = document.getElementById("filtroStatus");
   document.getElementById("btnFiltrar").addEventListener("click", preencherTabela);
   document.getElementById("btnLimpar").addEventListener("click", () => {
-    filtroBusca.value = ""; filtroDataIni.value = ""; filtroDataFim.value = ""; filtroStatus.value = "";
+    filtroBusca.value = ""; filtroDataIni.value = ""; filtroDataFim.value = "";
     preencherTabela();
   });
   document.getElementById("btnExportar").addEventListener("click", exportarCSV);
 
-  // estado
+  // Estado inicial
   inAnalista.value = currentUser;
 
-  // utils
+  // Utils
   const onlyDigits = (s) => (s || "").replace(/\D+/g,"");
-  const validarMSISDN = (v) => onlyDigits(v).length === 11;
+  const validarMSISDN = (v) => onlyDigits(v).length === 11; // validação apenas no formulário
   const parseDTLocal = (v) => { if (!v) return null; const d = new Date(v); return isNaN(d) ? null : d.getTime(); };
-  const toDTLocalValue = (ms) => { const d=new Date(ms); const pad=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 
   function toggleOutro(selectEl, inputEl) {
     if (selectEl.value === "__outro__") { inputEl.style.display = ""; inputEl.focus(); }
@@ -179,47 +167,34 @@
   selEquip.addEventListener("change", () => toggleOutro(selEquip, inEqOutro));
   selCen.addEventListener("change", () => toggleOutro(selCen, inCenOutro));
 
-  // carregar listas (equipamento de app/equipamento; cenário de app/cenarios se existir; senão infere)
+  // Listas: app/listas/equipamentos e app/listas/cenarios
   async function carregarListas() {
-    // equipamentos
-    const eqSnap = await get(child(ref(rtdb), "app/equipamento"));
-    const eqArr = eqSnap.exists() ? Object.values(eqSnap.val()).map(String).filter(Boolean) : [];
-    if (eqArr.length === 0) eqArr.push("Roteador","ONU","Modem","Switch");
+    const eqSnap = await get(child(ref(rtdb), "app/listas/equipamentos"));
+    const eqArr = eqSnap.exists() ? eqSnap.val().map(String).filter(Boolean) : [];
 
-    // cenários
-    let cenArr = [];
-    const cenSnap = await get(child(ref(rtdb), "app/cenarios"));
-    if (cenSnap.exists()) cenArr = Object.values(cenSnap.val()).map(String).filter(Boolean);
-    if (cenArr.length === 0) {
-      const todos = await listChamados();
-      const s = new Set();
-      for (const c of todos) { if (c.cenario) s.add(c.cenario); }
-      cenArr = [...s];
-      if (cenArr.length === 0) cenArr.push("Instalação","Intermitência","Sem Sinal","Lentidão");
-    }
+    const cenSnap = await get(child(ref(rtdb), "app/listas/cenarios"));
+    const cenArr = cenSnap.exists() ? cenSnap.val().map(String).filter(Boolean) : [];
 
     const mk = (arr) => arr.map(v => `<option value="${v}">${v}</option>`).join("");
     selEquip.innerHTML = `<option value="">(selecione)</option>${mk(eqArr)}<option value="__outro__">Outro…</option>`;
     selCen.innerHTML = `<option value="">(selecione)</option>${mk(cenArr)}<option value="__outro__">Outro…</option>`;
   }
 
-  // preencher tabela com filtros e permissões
+  // Tabela (sem Status). Exibição: não valida MSISDN.
   async function preencherTabela() {
-    const busca = filtroBusca.value.trim().toLowerCase();
-    const status = filtroStatus.value;
+    const busca = (filtroBusca.value || "").trim().toLowerCase();
     const dtIni = parseDTLocal(filtroDataIni.value);
     const dtFim = parseDTLocal(filtroDataFim.value);
 
-    const data = await listChamados({ busca, status });
+    const data = await listChamados({ busca }); // serviço já busca por vários campos
     const filtered = data.filter(c => {
       const created = Number(c.criadoEm || 0);
       if (dtIni && created < dtIni) return false;
       if (dtFim && created > dtFim) return false;
 
-      // estender busca textual para msisdn/analista/equipamento/chamado
-      const bucket = [
-        c.titulo, c.linha || c.msisdn, c.criadoPor?.username, c.equipamento
-      ].map(v => String(v||"").toLowerCase()).join("|");
+      // bucket extra pra garantir busca por msisdn, chamado, analista, equipamento
+      const bucket = [c.titulo, c.linha, c.criadoPor?.username, c.equipamento]
+        .map(v => String(v || "").toLowerCase()).join("|");
       if (busca && !bucket.includes(busca)) return false;
 
       return true;
@@ -239,7 +214,7 @@
         <td>${formatDate(c.criadoEm)}</td>
         <td>${c.criadoPor?.username || "-"}</td>
         <td>${c.titulo || "-"}</td>
-        <td>${c.linha || c.msisdn || "-"}</td>
+        <td>${c.linha || "-"}</td>
         <td>${c.equipamento || "-"}</td>
         <td>${c.cenario || "-"}</td>
         <td>
@@ -253,16 +228,17 @@
     }
   }
 
-  // copiar observação
+  // Copiar observação
   tbody.addEventListener("click", async (e) => {
     const btn = e.target.closest("button.icon-btn");
     if (!btn) return;
-    const txt = btn.getAttribute("data-copy") || "";
-    try { await navigator.clipboard.writeText(txt); toast("Observação copiada!", "success"); }
-    catch { toast("Falha ao copiar.", "error"); }
+    try {
+      await navigator.clipboard.writeText(btn.getAttribute("data-copy") || "");
+      toast("Observação copiada!", "success");
+    } catch { toast("Falha ao copiar.", "error"); }
   });
 
-  // submit: cria/atualiza com descricao salva no RTDB
+  // Salvar (criar/editar) — salva descricao; grava linha/equipamento/cenario nos nós próprios
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
@@ -270,18 +246,12 @@
     if (!validarMSISDN(msisdn)) { toast("MSISDN deve ter 11 dígitos.", "error"); inMSISDN.focus(); return; }
     if (!inChamado.value.trim()) { toast("Campo 'Chamado' é obrigatório.", "error"); inChamado.focus(); return; }
 
-    const equipamento = selEquip.value === "__outro__" ? (inEqOutro.value||"").trim() : selEquip.value;
-    const cenario = selCen.value === "__outro__" ? (inCenOutro.value||"").trim() : selCen.value;
-    const descricao = inObs.value.trim();
-    const chosen = parseDTLocal(inData.value); // pode ser null
+    const equipamento = selEquip.value === "__outro__" ? (inEqOutro.value || "").trim() : selEquip.value;
+    const cenario = selCen.value === "__outro__" ? (inCenOutro.value || "").trim() : selCen.value;
+    const descricao = (inObs.value || "").trim();
+    const chosen = parseDTLocal(inData.value); // opcional
 
-    const base = {
-      titulo: inChamado.value.trim(),
-      descricao,                // <- Observações salvas no banco
-      prioridade: "Média",
-      status: "Aberto"
-    };
-
+    const base = { titulo: inChamado.value.trim(), descricao, prioridade: "Média", status: "Aberto" };
     const id = inId.value;
 
     try {
@@ -311,22 +281,23 @@
     }
   });
 
-  // cancelar
+  // Cancelar
   document.getElementById("btnCancelar").addEventListener("click", () => {
     form.reset(); inId.value = ""; inAnalista.value = currentUser;
     inEqOutro.style.display="none"; inCenOutro.style.display="none";
   });
 
-  // editar/excluir
+  // Editar/Excluir (perfis)
   tbody.addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return;
     const id = b.dataset.edit || b.dataset.del;
 
     if (b.dataset.edit) {
+      // Carrega a linha renderizada (para precisão total, poderia buscar por id no RTDB)
       const row = b.closest("tr").children;
       inId.value = id;
       inChamado.value = row[2].textContent.trim();
-      inMSISDN.value = (row[3].textContent.trim()).replace(/\D+/g,"");
+      inMSISDN.value = row[3].textContent.trim();
 
       const eq = row[4].textContent.trim();
       if ([...selEquip.options].some(o=>o.value===eq)) { selEquip.value = eq; inEqOutro.style.display="none"; inEqOutro.value=""; }
@@ -336,12 +307,10 @@
       if ([...selCen.options].some(o=>o.value===cen)) { selCen.value = cen; inCenOutro.style.display="none"; inCenOutro.value=""; }
       else { selCen.value="__outro__"; inCenOutro.style.display=""; inCenOutro.value = cen; }
 
-      // pega observações do tooltip/botão
       const obsBtn = row[6].querySelector("button.icon-btn");
       inObs.value = obsBtn ? (obsBtn.getAttribute("data-copy") || "") : "";
 
-      // data/hora: opcional — limpar para não confundir
-      inData.value = "";
+      inData.value = ""; // edição opcional de data
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else if (b.dataset.del) {
       if (!isAdmin) return;
@@ -354,71 +323,46 @@
     }
   });
 
-  // Exportar CSV (com filtros atuais)
+  // Exportar CSV (respeita filtros atuais)
   async function exportarCSV() {
-    // aplica os mesmos filtros da tabela
-    const busca = filtroBusca.value.trim().toLowerCase();
-    const status = filtroStatus.value;
+    const busca = (filtroBusca.value || "").trim().toLowerCase();
     const dtIni = parseDTLocal(filtroDataIni.value);
     const dtFim = parseDTLocal(filtroDataFim.value);
-    const data = await listChamados({ busca, status });
+    const data = await listChamados({ busca });
 
     const filtered = data.filter(c => {
       const created = Number(c.criadoEm || 0);
       if (dtIni && created < dtIni) return false;
       if (dtFim && created > dtFim) return false;
-
-      const bucket = [
-        c.titulo, c.linha || c.msisdn, c.criadoPor?.username, c.equipamento
-      ].map(v => String(v||"").toLowerCase()).join("|");
+      const bucket = [c.titulo, c.linha, c.criadoPor?.username, c.equipamento]
+        .map(v => String(v||"").toLowerCase()).join("|");
       if (busca && !bucket.includes(busca)) return false;
-
       return true;
     });
 
     const rows = [];
-    rows.push(["Data", "Analista", "Chamado", "MSISDN", "Equipamento", "Cenário", "Observações", "Status"]);
+    rows.push(["Data","Analista","Chamado","MSISDN","Equipamento","Cenário","Observações"]);
     for (const c of filtered) {
       rows.push([
         formatDate(c.criadoEm),
         c.criadoPor?.username || "",
         c.titulo || "",
-        c.linha || c.msisdn || "",
+        c.linha || "",
         c.equipamento || "",
         c.cenario || "",
-        c.descricao || "",
-        c.status || ""
+        c.descricao || ""
       ]);
     }
 
-    // CSV com BOM para Excel
-    const csv = "\uFEFF" + rows.map(r => r.map(cell => {
-      const s = String(cell ?? "");
-      // escapar aspas e envolver em quotes
-      return `"${s.replace(/"/g, '""')}"`;
-    }).join(",")).join("\n");
-
+    const csv = "\uFEFF" + rows.map(r => r.map(cell => `"${String(cell??"").replace(/"/g,'""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    const stamp = new Date().toISOString().replace(/[:.]/g,"-");
-    a.href = url;
-    a.download = `chamados_${stamp}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-
-    toast(`Exportado ${filtered.length} registro(s)`, "success");
+    a.href = URL.createObjectURL(blob);
+    a.download = `chamados_${new Date().toISOString().replace(/[:.]/g,"-")}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
   }
 
-  // filtros reativos
-  [filtroBusca, filtroStatus, filtroDataIni, filtroDataFim].forEach(el => {
-    el.addEventListener("change", preencherTabela);
-    el.addEventListener("input", (e)=>{ if (e.target !== filtroBusca) preencherTabela(); });
-  });
-
-  // boot
+  // Boot
   await carregarListas();
   await preencherTabela();
 </script>
